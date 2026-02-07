@@ -1,0 +1,49 @@
+name: Deploy to GKE (Docker Hub)
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  IMAGE_NAME: hello-app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ----- Docker Hub Auth -----
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME:latest .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME:latest
+
+      # ----- GCP Auth -----
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials \
+            ${{ secrets.GKE_CLUSTER }} \
+            --region ${{ secrets.GKE_REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+      # ----- Deploy -----
+      - name: Deploy to Kubernetes
+        run: |
+          sed -i "s/DOCKERHUB_USERNAME/${{ secrets.DOCKERHUB_USERNAME }}/g" k8s/deployment.yaml
+          kubectl apply -f k8s/
