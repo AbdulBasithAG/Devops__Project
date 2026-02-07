@@ -14,6 +14,6 @@ spec:
     spec:
       containers:
         - name: hello
-          image: docker.io/DOCKERHUB_USERNAME/hello-app:latest
+          image: docker.io/gaffar12/hello-app:latest
           ports:
             - containerPort: 80
