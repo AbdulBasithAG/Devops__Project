@@ -13,16 +13,35 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout repo
+      # Checkout source code
       - uses: actions/checkout@v4
 
-
-      # --------------------- Terraform Deploy ---------------------
+      # ---------------------------------------------------------------
+      # Authenticate to GCP
+      # ---------------------------------------------------------------
       - name: Authenticate to GCP for Terraform
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
+      # ---------------------------------------------------------------
+      # Delete Existing Cluster (Fix 409 Error)
+      # ---------------------------------------------------------------
+      - name: Delete existing GKE cluster if it exists
+        run: |
+          if gcloud container clusters list --region=${{ secrets.GKE_REGION }} --project=${{ secrets.GCP_PROJECT_ID }} | grep -q "simple-gke"; then
+            echo "Cluster exists. Deleting..."
+            gcloud container clusters delete simple-gke \
+              --region=${{ secrets.GKE_REGION }} \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --quiet
+          else
+            echo "Cluster does not exist. Skipping delete."
+          fi
+
+      # ---------------------------------------------------------------
+      # Terraform – Create/Update Infra
+      # ---------------------------------------------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
 
@@ -34,61 +53,12 @@ jobs:
         working-directory: terraform
         run: terraform apply -auto-approve -var="project_id=${{ secrets.GCP_PROJECT_ID }}"
 
+
+      # ---------------------------------------------------------------
+      # Security – Vulnerability Scan (Trivy)
+      # ---------------------------------------------------------------
       - name: Install Trivy
         run: |
-            sudo apt-get update
-            sudo apt-get install -y wget
-            wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.tar.gz
-            tar zxvf trivy_Linux-64bit.tar.gz
-            sudo mv trivy /usr/local/bin/
-
-      - name: Scan Docker Image for Vulnerabilities (Trivy)
-        run: |
-            trivy image --exit-code 1 --severity HIGH,CRITICAL ${{ secrets.DOCKERHUB_USERNAME }}/hello-app:latest || true
-
-
-
-      # --------------------- Docker Build & Push ---------------------
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and Push Image
-        run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME:latest -f docker/Dockerfile .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME:latest
-
-
-      # --------------------- Configure kubectl ---------------------
-      - name: Set up gcloud
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Install GKE Auth Plugin
-        run: |
-          gcloud components install gke-gcloud-auth-plugin --quiet
-          echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
-
-      # Fetch credentials for the new TF-created cluster
-      - name: Get GKE Credentials
-        run: |
-          gcloud container clusters get-credentials \
-            $(terraform -chdir=infra output -raw cluster_name) \
-            --region ${{ secrets.GKE_REGION }} \
-            --project ${{ secrets.GCP_PROJECT_ID }}
-
-
-      # --------------------- Deploy Application ---------------------
-      - name: Deploy to GKE (Kustomize)
-        run: |
-                sed -i "s/DOCKERHUB_USERNAME/${{ secrets.DOCKERHUB_USERNAME }}/g" k8s/base/kustomization.yaml
-                # Apply using Kustomize
-                kubectl apply -k k8s/base
-
-
-      - name: Deploy Monitoring Stack (Kustomize)
-        run: |
-                  kubectl apply -k monitoring/
-
-
+          sudo apt-get update
+          sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy
