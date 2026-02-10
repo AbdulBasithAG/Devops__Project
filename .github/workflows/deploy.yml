@@ -25,21 +25,6 @@ jobs:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       # ---------------------------------------------------------------
-      # Delete Existing Cluster (Fix 409 Error)
-      # ---------------------------------------------------------------
-      - name: Delete existing GKE cluster if it exists
-        run: |
-          if gcloud container clusters list --region=${{ secrets.GKE_REGION }} --project=${{ secrets.GCP_PROJECT_ID }} | grep -q "simple-gke"; then
-            echo "Cluster exists. Deleting..."
-            gcloud container clusters delete simple-gke \
-              --region=${{ secrets.GKE_REGION }} \
-              --project=${{ secrets.GCP_PROJECT_ID }} \
-              --quiet
-          else
-            echo "Cluster does not exist. Skipping delete."
-          fi
-
-      # ---------------------------------------------------------------
       # Terraform – Create/Update Infra
       # ---------------------------------------------------------------
       - name: Setup Terraform
