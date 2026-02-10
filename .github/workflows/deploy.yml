@@ -1,9 +1,9 @@
-name: Deploy to GKE (Docker Hub)
+name: Deploy Infra + App to GKE
 
 on:
   push:
-    branches: [ "main" ]
-  workflow_dispatch: 
+    branches: ["main"]
+  workflow_dispatch:
 
 env:
   IMAGE_NAME: hello-app
@@ -13,44 +13,61 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Checkout repo
       - uses: actions/checkout@v4
 
-      # ----- Docker Hub Auth -----
+
+      # --------------------- Terraform Deploy ---------------------
+      - name: Authenticate to GCP for Terraform
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: terraform apply -auto-approve
+
+
+      # --------------------- Docker Build & Push ---------------------
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Build and Push Image
         run: |
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME:latest -f docker/Dockerfile .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME:latest
 
-      # ----- GCP Auth -----
-      - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
+      # --------------------- Configure kubectl ---------------------
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Install GKE auth plugin
+      - name: Install GKE Auth Plugin
         run: |
-              gcloud components install gke-gcloud-auth-plugin --quiet
-              echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
+          gcloud components install gke-gcloud-auth-plugin --quiet
+          echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
 
-
-      - name: Get GKE credentials
+      # Fetch credentials for the new TF-created cluster
+      - name: Get GKE Credentials
         run: |
           gcloud container clusters get-credentials \
-            ${{ secrets.GKE_CLUSTER }} \
+            $(terraform -chdir=infra output -raw cluster_name) \
             --region ${{ secrets.GKE_REGION }} \
             --project ${{ secrets.GCP_PROJECT_ID }}
 
-      # ----- Deploy -----
-      - name: Deploy to Kubernetes
+
+      # --------------------- Deploy Application ---------------------
+      - name: Deploy to GKE
         run: |
           sed -i "s/DOCKERHUB_USERNAME/${{ secrets.DOCKERHUB_USERNAME }}/g" k8s/deployment.yaml
           kubectl apply -f k8s/
