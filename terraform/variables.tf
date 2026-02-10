@@ -1,7 +1,7 @@
-output "cluster_name" {
-  value = google_container_cluster.gke.name
+variable "project_id" {}
+variable "region" {
+  default = "asia-south1"
 }
-
-output "endpoint" {
-  value = google_container_cluster.gke.endpoint
+variable "cluster_name" {
+  default = "simple-gke"
 }
