@@ -73,3 +73,9 @@ jobs:
                 # Apply using Kustomize
                 kubectl apply -k k8s/base
 
+
+      - name: Deploy Monitoring Stack (Kustomize)
+        run: |
+                  kubectl apply -k monitoring/
+
+
