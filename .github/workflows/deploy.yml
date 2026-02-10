@@ -67,7 +67,9 @@ jobs:
 
 
       # --------------------- Deploy Application ---------------------
-      - name: Deploy to GKE
+      - name: Deploy to GKE (Kustomize)
         run: |
-          sed -i "s/DOCKERHUB_USERNAME/${{ secrets.DOCKERHUB_USERNAME }}/g" k8s/deployment.yaml
-          kubectl apply -f k8s/
+                sed -i "s/DOCKERHUB_USERNAME/${{ secrets.DOCKERHUB_USERNAME }}/g" k8s/base/kustomization.yaml
+                # Apply using Kustomize
+                kubectl apply -k k8s/base
+
