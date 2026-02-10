@@ -1,4 +1,7 @@
 variable "project_id" {}
 variable "region" {
-  default = "us-central1"
+  default = "asia-south1"
+}
+variable "cluster_name" {
+  default = "simple-gke"
 }
