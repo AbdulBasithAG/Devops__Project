@@ -82,15 +82,17 @@ jobs:
       - name: Get Terraform Cluster Name
         id: tf-out
         run: |
-              CLUSTER=$(terraform -chdir=terraform output -raw cluster_name)
+              CLUSTER=$(terraform -chdir=terraform output cluster_name | head -n 1 | tr -d '\r')
               echo "cluster_name=$CLUSTER" >> $GITHUB_OUTPUT
+
 
       - name: Get GKE Credentials
         run: |
               gcloud container clusters get-credentials \
               ${{ steps.tf-out.outputs.cluster_name }} \
               --region ${{ secrets.GKE_REGION }} \
-              --project ${{ secrets.GCP_PROJECT_ID }}
+               --project ${{ secrets.GCP_PROJECT_ID }}
+
 
       # ---------------------------------------------------------------
       # Deploy App using Kustomize
