@@ -79,14 +79,18 @@ jobs:
         run: |
           gcloud components install gke-gcloud-auth-plugin --quiet
           echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
+      - name: Get Terraform Cluster Name
+        id: tf-out
+        run: |
+              CLUSTER=$(terraform -chdir=terraform output -raw cluster_name)
+              echo "cluster_name=$CLUSTER" >> $GITHUB_OUTPUT
 
       - name: Get GKE Credentials
         run: |
-          gcloud container clusters get-credentials \
-            $(terraform -chdir=terraform output -raw cluster_name) \
-            --region ${{ secrets.GKE_REGION }} \
-            --project ${{ secrets.GCP_PROJECT_ID }}
-
+              gcloud container clusters get-credentials \
+              ${{ steps.tf-out.outputs.cluster_name }} \
+              --region ${{ secrets.GKE_REGION }} \
+              --project ${{ secrets.GCP_PROJECT_ID }}
 
       # ---------------------------------------------------------------
       # Deploy App using Kustomize
