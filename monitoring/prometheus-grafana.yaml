@@ -1,4 +1,9 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: monitoring
+grafana:
+  adminPassword: "admin"
+
+  service:
+    type: LoadBalancer
+
+prometheus:
+  prometheusSpec:
+    retention: 24h
