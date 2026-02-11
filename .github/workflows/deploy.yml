@@ -70,7 +70,7 @@ jobs:
 
       # 🔍 Scan Image (Better approach using official action)
       - name: Scan Docker Image with Trivy
-        uses: aquasecurity/trivy-action@v0.20.0
+        uses: aquasecurity/trivy-action@0.19.0
         with:
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/hello-app:latest
           format: table
