@@ -1,4 +1,4 @@
-name: Deploy Infra + App to GKE
+name: Deploy Infra and App to GKE
 
 on:
   push:
@@ -9,33 +9,32 @@ env:
   IMAGE_NAME: hello-app
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: asia-south1
-  CLUSTER_NAME: simple-gke   # 🔁 Replace with your actual cluster name
-
+  CLUSTER_NAME: simple-gke  
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 🔹 Checkout repository
+      # Checkout repository
       - uses: actions/checkout@v4
 
-      # 🔹 Authenticate to GCP
+      # Authenticate to GCP
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # 🔹 Setup gcloud CLI with GKE auth plugin
+      #  Setup gcloud CLI with GKE auth plugin
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           install_components: 'gke-gcloud-auth-plugin'
 
-      # 🔹 Enable GKE plugin environment variable
+      #  Enable GKE plugin environment variable
       - name: Enable GKE auth plugin
         run: echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
 
-      # 🔹 Check if GKE cluster exists
+      #  Check if GKE cluster exists
       - name: Check if GKE cluster exists
         id: check_cluster
         run: |
@@ -108,7 +107,20 @@ jobs:
         run: |
           kubectl rollout status deployment/$IMAGE_NAME
 
-      # 🔹 Deploy monitoring stack
-      - name: Deploy Monitoring Stack
+      # 🔹 Deploy Monitoring Stack (Prometheus + Grafana)
+      - name: Deploy Prometheus and Grafana
         run: |
-          kubectl apply -k monitoring/
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add grafana https://grafana.github.io/helm-charts
+          helm repo update
+          kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+          helm upgrade --install prometheus prometheus-community/prometheus \
+          --namespace monitoring \
+          --set alertmanager.persistentVolume.enabled=false \
+          --set server.persistentVolume.enabled=false
+          helm upgrade --install grafana grafana/grafana \
+          --namespace monitoring \
+          --set persistence.enabled=false \
+          --set adminPassword='admin' \
+          --set service.type=LoadBalancer
+
