@@ -9,7 +9,7 @@ env:
   IMAGE_NAME: hello-app
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: asia-south1
-  CLUSTER_NAME: hello-gke-cluster   # 🔁 Replace with your actual cluster name
+  CLUSTER_NAME: simple-gke   # 🔁 Replace with your actual cluster name
 
 jobs:
   deploy:
