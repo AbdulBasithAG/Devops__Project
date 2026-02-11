@@ -48,7 +48,7 @@ jobs:
               echo "Cluster does not exist. Terraform will run."
           fi
 
-      # 🔹 Setup Terraform (only if cluster does not exist)
+      # Setup Terraform (only if cluster does not exist)
       - name: Setup Terraform
         if: steps.check_cluster.outputs.cluster_exists == 'false'
         uses: hashicorp/setup-terraform@v2
@@ -63,19 +63,19 @@ jobs:
         working-directory: terraform
         run: terraform apply -auto-approve -var="project_id=${{ env.PROJECT_ID }}"
 
-      # 🔹 Login to Docker Hub
+      # Login to Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 🔹 Build Docker image
+      # Build Docker image
       - name: Build Docker Image
         run: |
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME:latest -f docker/Dockerfile .
 
-      # 🔹 Scan Docker image with Trivy
+      # Scan Docker image with Trivy
       - name: Scan Docker Image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
@@ -84,30 +84,30 @@ jobs:
           exit-code: 1
           severity: HIGH,CRITICAL
 
-      # 🔹 Push Docker image (only if scan passes)
+      # Push Docker image (only if scan passes)
       - name: Push Docker Image
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME:latest
 
-      # 🔹 Get GKE credentials
+      # Get GKE credentials
       - name: Get GKE Credentials
         run: |
           gcloud container clusters get-credentials $CLUSTER_NAME \
             --region $REGION \
             --project $PROJECT_ID
 
-      # 🔹 Deploy app using Kustomize
+      # Deploy app using Kustomize
       - name: Deploy to GKE (Kustomize)
         run: |
           sed -i "s/DOCKERHUB_USERNAME/${{ secrets.DOCKERHUB_USERNAME }}/g" k8s/base/kustomization.yaml
           kubectl apply -k k8s/base
 
-      # 🔹 Verify deployment rollout
+      # Verify deployment rollout
       - name: Verify Deployment Rollout
         run: |
           kubectl rollout status deployment/$IMAGE_NAME
 
-      # 🔹 Deploy Monitoring Stack (Prometheus + Grafana)
+      # Deploy Monitoring Stack (Prometheus and Grafana)
       - name: Deploy Prometheus and Grafana
         run: |
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
