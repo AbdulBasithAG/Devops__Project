@@ -9,25 +9,34 @@ env:
   IMAGE_NAME: hello-app
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: asia-south1
-  CLUSTER_NAME: simple-gke   # 👈 Replace with your actual cluster name
+  CLUSTER_NAME: simple-gke   # 🔁 Replace with your cluster name
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # 🔹 Checkout code
       - uses: actions/checkout@v4
 
-      # 🔐 Authenticate
+      # 🔹 Authenticate to GCP
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
+      # 🔹 Setup gcloud CLI
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      # 🔍 STEP 1: Check if cluster exists
+      # 🔹 Install GKE Auth Plugin (Required for kubectl)
+      - name: Install GKE gcloud auth plugin
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
+          echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
+
+      # 🔹 Check if GKE cluster exists
       - name: Check if GKE cluster exists
         id: check_cluster
         run: |
@@ -41,7 +50,7 @@ jobs:
               echo "Cluster does not exist. Terraform will run."
           fi
 
-      # 🏗 Setup Terraform
+      # 🔹 Setup Terraform (Only if cluster doesn't exist)
       - name: Setup Terraform
         if: steps.check_cluster.outputs.cluster_exists == 'false'
         uses: hashicorp/setup-terraform@v2
@@ -56,45 +65,51 @@ jobs:
         working-directory: terraform
         run: terraform apply -auto-approve -var="project_id=${{ env.PROJECT_ID }}"
 
-      # 🐳 Docker Login
+      # 🔹 Login to Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 🐳 Build Image
+      # 🔹 Build Docker image
       - name: Build Docker Image
         run: |
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME:latest -f docker/Dockerfile .
 
-      # 🔍 Scan Image (Better approach using official action)
+      # 🔹 Scan Docker image with Trivy
       - name: Scan Docker Image with Trivy
-        uses: aquasecurity/trivy-action@0.19.0
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/hello-app:latest
           format: table
-          exit-code: 0
+          exit-code: 1
           severity: HIGH,CRITICAL
 
+      # 🔹 Push image (only if scan passes)
       - name: Push Docker Image
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/$IMAGE_NAME:latest
 
-      # 🔑 Get GKE Credentials
+      # 🔹 Get GKE credentials
       - name: Get GKE Credentials
         run: |
           gcloud container clusters get-credentials $CLUSTER_NAME \
             --region $REGION \
             --project $PROJECT_ID
 
-      # 🚀 Deploy App
+      # 🔹 Deploy application using Kustomize
       - name: Deploy to GKE (Kustomize)
         run: |
           sed -i "s/DOCKERHUB_USERNAME/${{ secrets.DOCKERHUB_USERNAME }}/g" k8s/base/kustomization.yaml
           kubectl apply -k k8s/base
 
-      # 📊 Deploy Monitoring
+      # 🔹 Verify rollout (recommended)
+      - name: Verify Deployment Rollout
+        run: |
+          kubectl rollout status deployment/$IMAGE_NAME
+
+      # 🔹 Deploy monitoring stack
       - name: Deploy Monitoring Stack
         run: |
           kubectl apply -k monitoring/
